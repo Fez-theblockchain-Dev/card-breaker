@@ -1,20 +1,40 @@
 import { Await, createFileRoute } from '@tanstack/react-router';
 import { Suspense } from 'react';
 import { LineChart, BarChart, Activity } from 'lucide-react';
+import { getBreakingSessions } from '../lib/database';
 
-// Simulated analytics data fetching
+// Real analytics data fetching from Supabase
 const fetchAnalytics = async () => {
-  await new Promise((r) => setTimeout(r, 1000));
-  return {
-    revenueLastMonth: 24500,
-    totalBreaks: 156,
-    activeSubscribers: 89,
-    recentBreaks: [
-      { id: 1, name: 'Premium Baseball Break', date: '2024-03-15', revenue: 1200 },
-      { id: 2, name: 'Basketball Mixer', date: '2024-03-14', revenue: 850 },
-      { id: 3, name: 'Football Select Break', date: '2024-03-13', revenue: 975 },
-    ]
-  };
+  try {
+    const sessions = await getBreakingSessions();
+    
+    const totalRevenue = sessions.reduce((sum, session) => sum + Number(session.sales_price), 0);
+    const totalCosts = sessions.reduce((sum, session) => sum + Number(session.package_cost), 0);
+    const netProfit = totalRevenue - totalCosts;
+    
+    return {
+      totalRevenue,
+      totalBreaks: sessions.length,
+      netProfit,
+      recentBreaks: sessions.slice(0, 5).map(session => ({
+        id: session.id,
+        buyer: session.buyer,
+        date: new Date(session.created_at!).toLocaleDateString(),
+        revenue: Number(session.sales_price),
+        cost: Number(session.package_cost),
+        profit: Number(session.sales_price) - Number(session.package_cost)
+      }))
+    };
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    // Return default data if user is not authenticated or there's an error
+    return {
+      totalRevenue: 0,
+      totalBreaks: 0,
+      netProfit: 0,
+      recentBreaks: []
+    };
+  }
 };
 
 export const Route = createFileRoute('/')({
@@ -38,12 +58,12 @@ function HomePage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium neon-text">Revenue (Last 30 Days)</p>
+                <p className="text-sm font-medium neon-text">Total Revenue</p>
                 <Suspense fallback={<div className="animate-pulse h-8 bg-gray-200 dark:bg-gray-700 rounded w-24 mt-1"></div>}>
                   <Await
                     promise={analytics}
                     children={(data) => (
-                      <p className="text-2xl font-semibold neon-text">${data.revenueLastMonth}</p>
+                      <p className="text-2xl font-semibold neon-text">${data.totalRevenue.toFixed(2)}</p>
                     )}
                   />
                 </Suspense>
@@ -72,12 +92,14 @@ function HomePage() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium neon-text">Active Users</p>
+                <p className="text-sm font-medium neon-text">Net Profit</p>
                 <Suspense fallback={<div className="animate-pulse h-8 bg-gray-200 dark:bg-gray-700 rounded w-16 mt-1"></div>}>
                   <Await
                     promise={analytics}
                     children={(data) => (
-                      <p className="text-2xl font-semibold neon-text">{data.activeSubscribers}</p>
+                      <p className={`text-2xl font-semibold ${data.netProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                        ${data.netProfit.toFixed(2)}
+                      </p>
                     )}
                   />
                 </Suspense>
@@ -99,15 +121,29 @@ function HomePage() {
                 promise={analytics}
                 children={(data) => (
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {data.recentBreaks.map((break_) => (
-                      <div key={break_.id} className="py-4 flex justify-between items-center">
-                        <div>
-                          <p className="text-sm font-medium neon-text">{break_.name}</p>
-                          <p className="text-sm neon-text opacity-75">{break_.date}</p>
+                    {data.recentBreaks.length > 0 ? (
+                      data.recentBreaks.map((break_) => (
+                        <div key={break_.id} className="py-4 flex justify-between items-center">
+                          <div>
+                            <p className="text-sm font-medium neon-text">Buyer: {break_.buyer}</p>
+                            <p className="text-sm neon-text opacity-75">{break_.date}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-medium neon-text">Revenue: ${break_.revenue.toFixed(2)}</p>
+                            <p className={`text-sm font-medium ${break_.profit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              Profit: ${break_.profit.toFixed(2)}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-sm font-medium neon-text">${break_.revenue}</p>
+                      ))
+                    ) : (
+                      <div className="py-8 text-center">
+                        <div>
+                          <p className="text-sm neon-text opacity-75">No breaking sessions logged yet.</p>
+                          <p className="text-sm neon-text opacity-75">Start by logging your first session!</p>
+                        </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               />

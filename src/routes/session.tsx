@@ -2,6 +2,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { createBreakingSession } from '../lib/database';
+import { useState } from 'react';
 
 const sessionSchema = z.object({
   packageCost: z.number()
@@ -28,6 +30,9 @@ export const Route = createFileRoute('/session')({
 });
 
 function SessionPage() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -44,17 +49,31 @@ function SessionPage() {
     }
   });
 
-  const onSubmit = (data: SessionForm) => {
-    console.log(data);
-    // Here you would typically send the data to your backend
-    alert('Session logged successfully!');
-    reset();
+  const onSubmit = async (data: SessionForm) => {
+    setIsSubmitting(true);
+    try {
+      await createBreakingSession(data);
+      setSubmitSuccess(true);
+      reset();
+      setTimeout(() => setSubmitSuccess(false), 5000);
+    } catch (error) {
+      console.error('Error creating breaking session:', error);
+      alert('There was an error logging your session. Please make sure you are signed in and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <h1 className="text-4xl font-bold mb-8 neon-text">Log Breaking Session</h1>
       
+      {submitSuccess && (
+        <div className="mb-6 p-4 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-100 rounded-lg">
+          Session logged successfully!
+        </div>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
         <div>
           <label htmlFor="packageCost" className="block mb-2 neon-text">
@@ -138,9 +157,10 @@ function SessionPage() {
 
         <button
           type="submit"
-          className="w-full px-6 py-3 bg-[var(--neon-orange)] text-white rounded-md hover:bg-orange-600 transition-colors font-semibold"
+          disabled={isSubmitting}
+          className="w-full px-6 py-3 bg-[var(--neon-orange)] text-white rounded-md hover:bg-orange-600 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Log Session
+          {isSubmitting ? 'Logging Session...' : 'Log Session'}
         </button>
       </form>
     </div>

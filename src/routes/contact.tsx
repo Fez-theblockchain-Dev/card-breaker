@@ -2,6 +2,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { submitContactForm } from '../lib/database';
+import { useState } from 'react';
 
 const contactSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -16,6 +18,9 @@ export const Route = createFileRoute('/contact')({
 });
 
 function ContactPage() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -25,17 +30,31 @@ function ContactPage() {
     resolver: zodResolver(contactSchema),
   });
 
-  const onSubmit = (data: ContactForm) => {
-    console.log(data);
-    // Here you would typically send the data to your backend
-    alert('Thank you for your message! We will get back to you soon.');
-    reset();
+  const onSubmit = async (data: ContactForm) => {
+    setIsSubmitting(true);
+    try {
+      await submitContactForm(data);
+      setSubmitSuccess(true);
+      reset();
+      setTimeout(() => setSubmitSuccess(false), 5000);
+    } catch (error) {
+      console.error('Error submitting contact form:', error);
+      alert('There was an error submitting your message. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="text-4xl font-bold mb-8 neon-text">Contact Us</h1>
       
+      {submitSuccess && (
+        <div className="mb-6 p-4 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-100 rounded-lg">
+          Thank you for your message! We will get back to you soon.
+        </div>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div>
           <label htmlFor="name" className="block mb-2 neon-text">Name</label>
@@ -78,9 +97,10 @@ function ContactPage() {
 
         <button
           type="submit"
-          className="px-6 py-2 bg-[var(--neon-orange)] text-white rounded-md hover:bg-orange-600 transition-colors"
+          disabled={isSubmitting}
+          className="px-6 py-2 bg-[var(--neon-orange)] text-white rounded-md hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Send Message
+          {isSubmitting ? 'Sending...' : 'Send Message'}
         </button>
       </form>
     </div>
